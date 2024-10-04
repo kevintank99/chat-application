@@ -11,3 +11,5 @@ Client-Side Instructions:
 Listen for the message event, which the server uses to send messages.
 Use the joinRoom event, providing the room_name as payload in the request and including the username in the headers. Note that you won’t be able to join the room if either the username or room name does not exist.
 Once connected to the room, you can send messages using the chatMessage event.
+
+I have included a Postman collection for creating users and rooms, as well as for retrieving all active rooms and chat messages by room.
