@@ -1,80 +1,100 @@
 const socketIO = require("socket.io");
 const { roomServices, userServices, chatServices } = require("../services");
 
-const initialiseSocket = (server) => {
-
+const socketHandler = (server) => {
   const io = socketIO(server);
 
   io.on("connection", (socket) => {
     console.log("Socket connection established");
 
     const username = socket.handshake.headers.username;
-    socket.on("joinRoom", async ({ room_name }) => {
-      
-			await validateRoom(socket, room_name, username)
-      // Check if user is already in the room
-      const isUserJoined = await roomServices.checkUserInRoom(room_name, isUserExists._id);
-      if (!isUserJoined) {
-        socket.join(room_name);
-        await Promise.all([
-          roomServices.addUserToRoom(room_name, isUserExists._id),
-          emitMessageToRoom(socket, "message", `${username} has joined the room`, room_name),
-        ]);
-      } else {
-        await emitMessage(socket, "message", `You are already in this room.`);
+    
+    if (!username) {
+      return socket.disconnect(true); // Disconnect if username is missing
+    }
+
+    socket.on("joinRoom", async (payload) => {
+      try {
+        const roomName = payload?.room_name;
+        await handleJoinRoom(socket, roomName, username);
+      } catch (error) {
+        console.error("Error joining room:", error);
+        socket.emit("error", "An error occurred while joining the room.");
       }
-      socket.on("chatMessage", async (message) => {
-        await Promise.all([
-          emitMessageToRoom(socket, "message", `${username}: ${message}`, room_name),
-          chatServices.createChat(isUserExists._id, isRoomExists?._id, message),
-        ]);
-      });
     });
 
     socket.on("disconnect", async () => {
-      const getUser = await userServices.checkUserExists(username);
-      await roomServices.removeUserFromAllRooms(getUser?._id);
+      try {
+        await handleDisconnect(username);
+      } catch (error) {
+        console.error("Error during disconnect:", error);
+      }
     });
   });
 };
 
-const validateRoom = async (socket, room_name, username) =>{
+const handleJoinRoom = async (socket, roomName, username) => {
+  if (!roomName) {
+    return socket.emit("message", "Room name is missing.");
+  }
 
-	if (!room_name) {
-		await emitMessage(socket, "message", `Room name is missing`);
-	}
+  const user = await userServices.checkUserExists(username);
+  if (!user) {
+    return socket.emit("message", "Username is not registered.");
+  }
 
-	if (!username) {
-		await emitMessage(socket, "message", `Username is missing`);
-	}
+  let room = await roomServices.checkRoomExists(roomName);
+  if (!room) {
+    room = await roomServices.createRoom(roomName); // Automatically create room if not exists
+  }
 
-	// Check if user exists
-	const isUserExists = await userServices.checkUserExists(username);
-	if (!isUserExists) {
-		await emitMessage(socket, "message", `Username is not registered`);
-	}
+  const isRoomActive = await roomServices.isRoomActive(roomName);
+  if (!isRoomActive) {
+    return socket.emit("message", `${roomName} is not active anymore.`);
+  }
 
-	// Check if room exists, else create it
-	const isRoomExists = await roomServices.checkRoomExists(room_name);
-	if (!isRoomExists) {
-		await roomServices.createRoom(room_name);
-	}
+  const isUserInRoom = await roomServices.checkUserInRoom(roomName, user._id);
+  if (!isUserInRoom) {
+    socket.join(roomName); // Join socket to room
+    await roomServices.addUserToRoom(roomName, user._id);
+    await emitMessageToRoom(socket, "message", `${username} has joined the room`, roomName);
+  } else {
+    socket.emit("message", "You are already in this room.");
+  }
 
-	// Check if the room is active or not
-	const isActive = await roomServices.isRoomActive(room_name, true);
-	if (!isActive) {
-		await emitMessage(socket, "message", `${room_name} is not active anymore`);
-	}
-}
-
-const emitMessageToRoom = async (socket, event, payload, room) => {
-  return await socket.to(room).emit(event, payload);
+  socket.on("chatMessage", async (message) => {
+    try {
+      await handleChatMessage(socket, roomName, user._id, message);
+    } catch (error) {
+      console.error("Error sending chat message:", error);
+      socket.emit("error", "An error occurred while sending the message.");
+    }
+  });
 };
 
-const emitMessage = async (socket, event, payload) => {
-  return await socket.emit(event, payload);
+const handleChatMessage = async (socket, roomName, userId, message) => {
+  const room = await roomServices.checkRoomExists(roomName);
+  if (!room) {
+    return socket.emit("message", "Room no longer exists.");
+  }
+
+  await Promise.all([
+    emitMessageToRoom(socket, "message", `${socket.handshake.headers.username}: ${message}`, roomName),
+    chatServices.createChat(userId, room._id, message),
+  ]);
+};
+
+const handleDisconnect = async (username) => {
+  const user = await userServices.checkUserExists(username);
+  if (user) {
+    await roomServices.removeUserFromAllRooms(user._id);
+  }
+};
+
+const emitMessageToRoom = (socket, event, message, roomName) => {
+  socket.to(roomName).emit(event, message);
 };
 
 module.exports = {
-  initialiseSocket,
+  socketHandler,
 };
