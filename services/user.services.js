@@ -2,7 +2,7 @@ const {UserModel} = require('../models')
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const {jwt_secret, jwt_expiration} = require('../config')
-
+console.log();
 const createUser = async (username, password) => {
   const hashedPassword = bcrypt.hashSync(password, 10)
   const user = new UserModel({username, password:hashedPassword})
@@ -20,7 +20,16 @@ const generateToken = (user) => {
 };
 
 const verifyToken = (token) => {
-  return jwt.verify(token, jwt_secret);
+
+
+return jwt.verify(token, jwt_secret, (err, decoded) => {
+  if (err) {
+      console.error('Token verification failed:', err);
+      return false
+  } else {
+      return decoded
+  }
+});
 };
 
 module.exports = {

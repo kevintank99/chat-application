@@ -7,15 +7,18 @@ const socketHandler = (server) => {
   io.on("connection", (socket) => {
     console.log("Socket connection established");
 
-    const username = socket.handshake.headers.username;
-    
-    if (!username) {
+    const jwtToken = socket.handshake.headers.authorization;
+    console.log("socket.handshake.headers", socket.handshake.headers);
+
+    const validUser = userServices.verifyToken(jwtToken)
+    if (!jwtToken || !validUser) {
       return socket.disconnect(true); // Disconnect if username is missing
     }
-
+    const username = validUser?.username
     socket.on("joinRoom", async (payload) => {
       try {
         const roomName = payload?.room_name;
+        console.log("roomName........", roomName);
         await handleJoinRoom(socket, roomName, username);
       } catch (error) {
         console.error("Error joining room:", error);
@@ -48,8 +51,7 @@ const handleJoinRoom = async (socket, roomName, username) => {
     room = await roomServices.createRoom(roomName); // Automatically create room if not exists
   }
 
-  const isRoomActive = await roomServices.isRoomActive(roomName);
-  if (!isRoomActive) {
+  if (!room?.is_active) {
     return socket.emit("message", `${roomName} is not active anymore.`);
   }
 
@@ -67,7 +69,7 @@ const handleJoinRoom = async (socket, roomName, username) => {
       await handleChatMessage(socket, roomName, user._id, message);
     } catch (error) {
       console.error("Error sending chat message:", error);
-      socket.emit("error", "An error occurred while sending the message.");
+      socket.emit("message", "An error occurred while sending the message.");
     }
   });
 };
@@ -91,7 +93,7 @@ const handleDisconnect = async (username) => {
   }
 };
 
-const emitMessageToRoom = (socket, event, message, roomName) => {
+const emitMessageToRoom = async (socket, event, message, roomName) => {
   socket.to(roomName).emit(event, message);
 };
 

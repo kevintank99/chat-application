@@ -6,7 +6,7 @@ const envFile = `.env.${env}`;
 dotenv.config({ path: envFile });
 
 const config = {
-    version: process.env.version,
+    version: process.env.VERSION,
     port:process.env.PORT,
     db: process.env.DB_CONNECTION_STRING,
     jwt_expiration: process.env.JWT_EXPIRATION,

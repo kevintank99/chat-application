@@ -14,8 +14,6 @@ const createNewUser = async (req, res) => {
 		if (isUser) {
 			res.status(409).json({ message: "Username already exists" })
 		} else {
-
-
 			const isUserSaved = await userServices.createUser(username, password)
 			if (isUserSaved) {
 				res.status(201).json({ message: "User Created successfully" })
@@ -35,11 +33,11 @@ const loginUser = async(req, res) => {
 	try {
 		const user = await userServices.checkUserExists(username)
 		if (!user) {
-				return res.status(404).json({ message: 'User not found' });
+			return res.status(404).json({ message: 'User not found' });
 		}
 		const isMatch = bcrypt.compare(password, user.password);
 		if (!isMatch) {
-				return res.status(401).json({ message: 'Invalid credentials' });
+			return res.status(401).json({ message: 'Invalid credentials' });
 		}
 		const token = userServices.generateToken(user);
 		res.status(200).json({ message: 'User Authenticated', token });
